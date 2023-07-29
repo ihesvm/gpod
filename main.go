@@ -1,16 +1,21 @@
 package main
 
 import (
- "fmt"
- "net/http"
- "io"
- "context"
- "errors"
- "net"
- "io/ioutil"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"io"
+	"io/ioutil"
+	"net"
+	"net/http"
 )
 
 const keyServerAddr = "serverAddr"
+
+
+
 
 
 func getRoot(w http.ResponseWriter, r *http.Request) {
@@ -24,6 +29,8 @@ func getRoot(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Printf("could not read body: %s\n", err)
 	}
+
+
 
 	fmt.Printf("%s: got / request. first(%t)=%s, second(%t)=%s, body:\n%s\n",
 		ctx.Value(keyServerAddr),
@@ -42,9 +49,10 @@ func getHello(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+
 	io.WriteString(w, fmt.Sprintf("Hello, %s!\n", myName))
 }
-
 
 func main() {
 	mux := http.NewServeMux()
@@ -61,8 +69,17 @@ func main() {
 		},
 	}
 
+	serverTwo := &http.Server{
+		Addr:    ":1717",
+		Handler: mux,
+		BaseContext: func(l net.Listener) context.Context {
+			ctx = context.WithValue(ctx, keyServerAddr, l.Addr().String())
+			return ctx
+		},
+	}
 	go func() {
 		err := serverOne.ListenAndServe()
+
 		if errors.Is(err, http.ErrServerClosed) {
 			fmt.Printf("server one closed\n")
 		} else if err != nil {
@@ -71,6 +88,16 @@ func main() {
 		cancelCtx()
 	}()
 
+	go func() {
+		err := serverTwo.ListenAndServe()
+		if errors.Is(err, http.ErrServerClosed) {
+			fmt.Printf("server two closed\n")
+		} else if err != nil {
+			fmt.Printf("error listening for server two: %s\n", err)
+		}
+
+		cancelCtx()
+	}()
 
 	<-ctx.Done()
 
